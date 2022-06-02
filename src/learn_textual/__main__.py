@@ -68,6 +68,17 @@ class TreeControl(textual.widgets.TreeControl[str]):
         if node.children:
             await node.toggle()
 
+    async def remove(self, node_id: textual.widgets.NodeID) -> None:
+        """
+        :raise KeyError: If there are no nodes with given ID.
+        """
+        assert node_id != self.root.id, "Cannot remove root node."
+        node = self.nodes.pop(node_id)
+        parent = node.parent
+        assert parent is not None
+        parent.children.remove(node)
+        parent.tree.children.remove(node.tree)
+
 
 class App(textual.app.App):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -86,8 +97,8 @@ class App(textual.app.App):
 
     async def on_mount(self) -> None:
         file_tree = self._file_tree
-        await self.view.dock(file_tree, edge="top")
         await self.view.dock(self._message_area, edge="bottom", size=1)
+        await self.view.dock(file_tree, edge="top")
         await file_tree.focus()
 
         # Example data.
@@ -96,6 +107,8 @@ class App(textual.app.App):
         await file_tree.root.add(label="tmp", data="tmp")
         await file_tree.root.add(label="usr", data="usr")
         await file_tree.add(node_id=file_tree.id, label="lib", data="lib")
+        await file_tree.add(node_id=file_tree.id, label="share", data="share")
+        await file_tree.remove(node_id=file_tree.id)
 
 
 async def async_main() -> int:
