@@ -98,8 +98,10 @@ class DirectoryTree(TreeControl[pathlib.Path]):
     ) -> None:
         node = message.node
         if not node.children:
-            for path in node.data.iterdir():
-                await node.add(label=path.name, data=path)
+            hovered_path = node.data
+            if hovered_path.is_dir():
+                for path in hovered_path.iterdir():
+                    await node.add(label=path.name, data=path)
         await super().handle_tree_click(message)
 
 
