@@ -2,6 +2,7 @@
 
 # Standard libraries.
 import asyncio
+import pathlib
 import sys
 import typing
 
@@ -12,6 +13,8 @@ import textual.app
 import textual.events
 import textual.widget
 import textual.widgets
+
+_T = typing.TypeVar("_T")
 
 
 async def shutdown_app(app: textual.app.App) -> None:
@@ -48,7 +51,7 @@ class MessageArea(textual.widget.Widget):
             await shutdown_app(self.app)
 
 
-class TreeControl(textual.widgets.TreeControl[str]):
+class TreeControl(textual.widgets.TreeControl[_T]):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.show_cursor = True
@@ -63,7 +66,7 @@ class TreeControl(textual.widgets.TreeControl[str]):
             self.hover_node = self.cursor
         super().watch_cursor_line(value)
 
-    async def handle_tree_click(self, message: textual.widgets.TreeClick[str]) -> None:
+    async def handle_tree_click(self, message: textual.widgets.TreeClick[_T]) -> None:
         node = message.node
         if node.children:
             await node.toggle()
@@ -80,10 +83,30 @@ class TreeControl(textual.widgets.TreeControl[str]):
         parent.tree.children.remove(node.tree)
 
 
+class DirectoryTree(TreeControl[pathlib.Path]):
+    def __init__(
+        self, *args: typing.Any, directory: pathlib.Path, **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, label=directory.name, data=directory, **kwargs)
+
+    async def on_mount(self) -> None:
+        message = textual.widgets.TreeClick[pathlib.Path](sender=self, node=self.root)
+        await self.handle_tree_click(message=message)
+
+    async def handle_tree_click(
+        self, message: textual.widgets.TreeClick[pathlib.Path]
+    ) -> None:
+        node = message.node
+        if not node.children:
+            for path in node.data.iterdir():
+                await node.add(label=path.name, data=path)
+        await super().handle_tree_click(message)
+
+
 class App(textual.app.App):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
-        self._file_tree = TreeControl(label="/", data="/")
+        self._file_tree = DirectoryTree(directory=pathlib.Path.home().resolve())
         self._message_area = MessageArea()
 
     async def on_key(self, event: textual.events.Key) -> None:
@@ -100,15 +123,6 @@ class App(textual.app.App):
         await self.view.dock(self._message_area, edge="bottom", size=1)
         await self.view.dock(file_tree, edge="top")
         await file_tree.focus()
-
-        # Example data.
-        await file_tree.root.add(label="home", data="home")
-        await file_tree.add(node_id=file_tree.id, label="alice", data="alice")
-        await file_tree.root.add(label="tmp", data="tmp")
-        await file_tree.root.add(label="usr", data="usr")
-        await file_tree.add(node_id=file_tree.id, label="lib", data="lib")
-        await file_tree.add(node_id=file_tree.id, label="share", data="share")
-        await file_tree.remove(node_id=file_tree.id)
 
 
 async def async_main() -> int:
