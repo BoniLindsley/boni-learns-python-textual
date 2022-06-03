@@ -1,21 +1,29 @@
-[project]
+[build-system]
+requires = ["poetry >= 1.1.13"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
 name = "boni-learns-python-textual"
 version = "0.0.1"
 description = "Figuring out how textual works."
-requires-python = ">= 3.10"
-license.text = "MIT"
-dependencies = [
-  "textual",
+license = "MIT"
+authors = [
+    "Boni Lindsley <boni@lindsley.xyz>"
 ]
 
-[[project.authors]]
-name = "Boni Lindsley"
-email = "boni@lindsley.xyz"
+[tool.poetry.dependencies]
+python = "^3.10"
+textual = "^0.1.18"
 
-[project.optional-dependencies]
-dev = [
-  "black >= 22.3.0",
-  "mypy >= 0.960",
-  "pylint >= 2.13.9",
-  "pytest >= 7.1.2",
-]
+[tool.poetry.dev-dependencies]
+black = "^22.3.0"
+mypy = "^0.960"
+pylint = "^2.13.9"
+pytest = "^7.1.2"
+
+[[tool.poetry.packages]]
+include = "learn_textual"
+from = "src"
+
+[tool.poetry.scripts]
+learn_textual = 'learn_textual.__main__:main'
