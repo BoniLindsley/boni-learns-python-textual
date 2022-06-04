@@ -2,6 +2,13 @@
 requires = ["poetry >= 1.1.13"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.mypy]
+explicit_package_bases = true
+mypy_path = "src:tests"
+namespace_packages = true
+show_error_codes = true
+strict = true
+
 [tool.poetry]
 name = "boni-learns-python-textual"
 version = "0.0.1"
