@@ -1,8 +1,10 @@
 # /usr/bin/env python
 
 # Standard libraries.
+import collections.abc
 import asyncio
 import pathlib
+import shutil
 import sys
 import typing
 
@@ -105,9 +107,74 @@ class DirectoryTree(TreeControl[pathlib.Path]):
         await super().handle_tree_click(message)
 
 
+class ControlPanel(TreeControl[str]):
+    _server_runner: collections.abc.AsyncGenerator[None, None]
+    _server_node: textual.widgets.TreeNode[str]
+    _client_node: textual.widgets.TreeNode[str]
+    _rclone_path_node: textual.widgets.TreeNode[str]
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, label="rclone rc", data="", **kwargs)
+
+    async def on_mount(self) -> None:
+        self._server_runner = self._run_server()
+        root = self.root
+        await root.add(label="Server: ...", data="")
+        self._server_node = self.nodes[self.id]
+        await root.add(label="Client: ...", data="")
+        self._client_node = self.nodes[self.id]
+        await root.add(label="rclone path: ...", data="")
+        self._rclone_path_node = self.nodes[self.id]
+        await root.expand()
+
+    async def handle_tree_click(self, message: textual.widgets.TreeClick[str]) -> None:
+        node = message.node
+        if node is self._server_node:
+            await self._server_runner.asend(None)
+
+    async def _run_server(self) -> collections.abc.AsyncGenerator[None, None]:
+        rclone_path_node = self._rclone_path_node
+        server_node = self._server_node
+        while True:
+            rclone_path: str | None = rclone_path_node.data
+            if not rclone_path:
+                rclone_path = shutil.which("rclone")
+                if rclone_path is None:
+                    server_node.label = "Server: Cannot find rclone binary."
+                    self.refresh()
+                    yield
+                    continue
+                rclone_path_node.data = rclone_path
+                rclone_path_node.label = "rclone path: " + rclone_path
+            server_node.label = "Server: Starting."
+            self.refresh()
+            server_subprocess = await asyncio.create_subprocess_exec(
+                rclone_path, "rcd", stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                stderr = server_subprocess.stderr
+                assert stderr is not None
+                first_line = await stderr.readline()
+                expected_line = b" NOTICE: Serving remote control on "
+                if expected_line in first_line:
+                    server_node.label = "Server: Started."
+                else:
+                    server_node.label = "Server: Started but may be incompatible."
+                self.refresh()
+                yield
+            finally:
+                server_node.label = "Server: Stopping."
+                self.refresh()
+                server_subprocess.kill()
+            server_node.label = "Server: Stopped."
+            self.refresh()
+            yield
+
+
 class App(textual.app.App):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
+        self._control_panel = ControlPanel()
         self._file_tree = DirectoryTree(directory=pathlib.Path.home().resolve())
         self._message_area = MessageArea()
 
@@ -121,10 +188,9 @@ class App(textual.app.App):
             event.stop()
 
     async def on_mount(self) -> None:
-        file_tree = self._file_tree
-        await self.view.dock(self._message_area, edge="bottom", size=1)
-        await self.view.dock(file_tree, edge="top")
-        await file_tree.focus()
+        await self.view.dock(self._control_panel, self._file_tree, edge="top")
+        await self.view.dock(self._message_area, edge="bottom", size=1, z=1)
+        await self._control_panel.focus()
 
 
 async def async_main() -> int:
