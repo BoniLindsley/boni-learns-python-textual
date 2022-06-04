@@ -19,11 +19,6 @@ import textual.widgets
 _T = typing.TypeVar("_T")
 
 
-async def shutdown_app(app: textual.app.App) -> None:
-    # Library method is not typed.
-    await app.shutdown()  # type: ignore[no-untyped-call]
-
-
 class MessageArea(textual.widget.Widget):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -50,7 +45,7 @@ class MessageArea(textual.widget.Widget):
 
     async def process_command(self) -> None:
         if self._text.plain == ":q":
-            await shutdown_app(self.app)
+            await self.app.action("quit")
 
 
 class TreeControl(textual.widgets.TreeControl[_T]):
@@ -184,7 +179,7 @@ class App(textual.app.App):
             await message_area.focus()
             await message_area.forward_event(event)
         if event.key == "q":
-            await shutdown_app(self)
+            await self.action("quit")
             event.stop()
 
     async def on_mount(self) -> None:
