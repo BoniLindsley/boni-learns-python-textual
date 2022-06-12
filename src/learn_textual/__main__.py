@@ -13,6 +13,7 @@ import rich.console
 import rich.text
 import textual.app
 import textual.events
+import textual.keys
 import textual.widget
 import textual.widgets
 
@@ -166,26 +167,80 @@ class ControlPanel(TreeControl[str]):
             yield
 
 
+Key = str
+KeySequence = tuple[Key, ...]
+
+
+class KeyMap:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._current_sequence = KeySequence()
+        """Sequence of keys pressed so far."""
+        self._mapping: dict[KeySequence, KeySequence] = {}
+        """Key sequences to map to and from."""
+
+    def bind(self, source: KeySequence, target: KeySequence) -> None:
+        assert not self._current_sequence, "Cannot bind while handling key map."
+        self._mapping[source] = target
+
+    def unbind(self, source: KeySequence) -> None:
+        assert not self._current_sequence, "Cannot unbind while handling key map."
+        try:
+            del self._mapping[source]
+        except KeyError:
+            pass
+
+    def press(self, key: str) -> bool | KeySequence:
+        """
+        Returns either mapped-to sequence or whether key was handled.
+        """
+        current_sequence = self._current_sequence + (key,)
+        self._current_sequence = tuple[Key, ...]()
+        try:
+            return self._mapping[current_sequence]
+        except KeyError:
+            current_length = len(current_sequence)
+            can_continue = any(
+                source[:current_length] == current_sequence for source in self._mapping
+            )
+            if can_continue:
+                self._current_sequence = current_sequence
+            return can_continue
+
+
 class App(textual.app.App):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self._control_panel = ControlPanel()
         self._file_tree = DirectoryTree(directory=pathlib.Path.home().resolve())
+        self._key_map = KeyMap()
         self._message_area = MessageArea()
 
-    async def on_key(self, event: textual.events.Key) -> None:
-        if event.key == ":":
-            message_area = self._message_area
-            await message_area.focus()
-            await message_area.forward_event(event)
-        if event.key == "q":
-            await self.action("quit")
-            event.stop()
+    async def press(self, key: str) -> bool:
+        mapped_sequence = self._key_map.press(key)
+        if isinstance(mapped_sequence, tuple):
+            for mapped_to_key in mapped_sequence:
+                event = textual.events.Key(sender=self, key=mapped_to_key)
+                await self.on_event(event)
+                if not event._stop_propagation:  # pylint: disable=protected-access
+                    break
+        elif not mapped_sequence:
+            return await super().press(key)
+        return True
+
+    async def action_focus_message_area(self, key: str) -> None:
+        message_area = self._message_area
+        await message_area.focus()
+        event = textual.events.Key(sender=self, key=key)
+        await message_area.forward_event(event)
 
     async def on_mount(self) -> None:
         await self.view.dock(self._control_panel, self._file_tree, edge="top")
         await self.view.dock(self._message_area, edge="bottom", size=1, z=1)
         await self._control_panel.focus()
+        await self.bind(":", "focus_message_area(':')", "Enable command mode.")
+        await self.bind("q", "quit", "Quit")
+        self._key_map.bind(("Z", "Z"), ("q",))
 
 
 async def async_main() -> int:
