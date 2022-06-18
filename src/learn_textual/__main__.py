@@ -238,7 +238,7 @@ class App(textual.app.App):
     async def on_mount(self) -> None:
         await self.view.dock(self._control_panel, self._file_tree, edge="top")
         await self.view.dock(self._message_area, edge="bottom", size=1, z=1)
-        await self._control_panel.focus()
+        await self.app.set_focus(self._control_panel)
         await self.bind(":", "focus_message_area(':')", "Enable command mode.")
         await self.bind("q", "quit", "Quit")
         self._key_map.bind(("Z", "Z"), ("q",))
