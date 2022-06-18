@@ -1,8 +1,9 @@
 # /usr/bin/env python
 
 # Standard libraries.
-import collections.abc
 import asyncio
+import collections.abc
+import os
 import pathlib
 import shutil
 import sys
@@ -243,7 +244,17 @@ class App(textual.app.App):
         self._key_map.bind(("Z", "Z"), ("q",))
 
 
+def windows_terminal_workaround() -> None:
+    """
+    It did not work; I did not know why.
+    This works; I do not know why.
+    """
+    if os.name == "nt":
+        os.system("")
+
+
 async def async_main() -> int:
+    windows_terminal_workaround()
     await App().process_messages()
     return 0
 
